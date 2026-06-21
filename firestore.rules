@@ -1,0 +1,41 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== المستخدمون =====
+    match /users/{userId} {
+      // أي شخص يمكنه قراءة بيانات البائع العامة (الاسم، الصورة...)
+      allow read: if true;
+      // المستخدم فقط يمكنه إنشاء/تعديل ملفه الشخصي
+      allow create, update: if request.auth != null
+                            && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    // ===== الإعلانات =====
+    match /listings/{listingId} {
+      // الإعلانات عامة للقراءة
+      allow read: if true;
+
+      // الإنشاء: يجب أن يكون مسجّل الدخول وأن يكون هو البائع
+      allow create: if request.auth != null
+                    && request.resource.data.seller.uid == request.auth.uid
+                    && request.resource.data.title is string
+                    && request.resource.data.title.size() > 4;
+
+      // التعديل: المالك فقط (مع منع تزوير ملكية البائع)
+      allow update: if request.auth != null
+                    && resource.data.seller.uid == request.auth.uid
+                    && request.resource.data.seller.uid == request.auth.uid;
+
+      // السماح بزيادة عدد المشاهدات لأي شخص (حقل views فقط)
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['views']);
+
+      // الحذف: المالك فقط
+      allow delete: if request.auth != null
+                    && resource.data.seller.uid == request.auth.uid;
+    }
+  }
+}
